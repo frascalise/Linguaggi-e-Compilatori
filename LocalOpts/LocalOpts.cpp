@@ -1,3 +1,17 @@
+/*
+    TODO:
+        - [x] Algebraic Identity: x+0 = 0+x = x  | x*1 = 1*x = x
+            - [x] Controllare se l'operazione è una Instruction::Mul o Instruction::Add
+            - [x] Controllare se esiste una costante e se è uguale ad 1 (Mul) o a 0 (Add)
+            - [x] Rimuovere l'istruzione
+        - [] Strength Reduction: 15*x = x*15 = (x<<4)-1 | y = x/8 -> y = x>>3
+            - [] Controllare se l'operazione è una Instruction::Mul
+            - [] Controllare se esiste una costante
+            - [] Calcolare se è potenza di due precisa oppure serve una somma/sottrazione
+            - [] Creare le istruzioni
+        - [] Multi-Instruction Optimization: a=b+1, c=a-1 -> a=b+1, c=b
+*/
+
 #include "llvm/Transforms/Utils/LocalOpts.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instructions.h"
@@ -5,96 +19,68 @@
 using namespace llvm;
 
 bool runOnBasicBlock(BasicBlock &B) {
-    
-    for (auto istruzione = B.begin(); istruzione != B.end(); ++istruzione) {   // Utilizzato per scorrere l'intero BasicBlock tra le varie istruzioni
 
-        if (istruzione->getOpcode() == Instruction::Mul) {      // Controllo se l'istruzione è una moltiplicazione
-            BinaryOperator *moltiplicazione = dyn_cast<BinaryOperator>(istruzione);
+    for (auto istruzione = B.begin(); istruzione != B.end(); ) {
+
+//      -------------------- Algebraic Identity --------------------
+        
+        if (istruzione->getOpcode() == Instruction::Add){
             
-            istruzione->print(outs());  // Stampa l'istruzione
-            
-            int i = 0;
-            ConstantInt *costanteNumerica = nullptr;    // Gli operandi della moltiplicazione vengono settati a nullptr perchè cosi vengono
-            Value *operandoMoltiplicazione1 = nullptr;  // resettati ad ogni iterazione.
-            Value *operandoMoltiplicazione2 = nullptr;  // Non è detto che questo Value venga utilizzato
+            BinaryOperator *addizione = dyn_cast<BinaryOperator>(istruzione);         // Puntatore all'istruzione corrente
+
+            ConstantInt* constAI = nullptr;
+            Value* opAI1 = nullptr;
+            Value* opAI2 = nullptr;
 
             for (auto operando = istruzione->op_begin(); operando != istruzione->op_end(); ++operando) {
 
-                if (dyn_cast<ConstantInt>(operando))                            // Se nella moltiplicazione esiste una costante numerica la salvo,
-                    costanteNumerica = dyn_cast<ConstantInt>(operando);         // altrimenti vorrà dire che nella moltiplicazione ci sono soltanto 
-                else if (i == 0)                                                // 2 variabili. (e quindi non 1 costante e 1 variabile)
-                    operandoMoltiplicazione1 = *operando;
-                else if (i == 1)
-                    operandoMoltiplicazione2 = *operando;
-
-                i++;
+                if (dyn_cast<ConstantInt>(operando))                // Se nella addizione esiste una costante numerica la salvo,
+                    constAI = dyn_cast<ConstantInt>(operando);      // altrimenti vorrà dire che nella addizione ci saranno soltanto    
+                else if (!opAI1)                                    // 2 variabili. (e quindi non 1 costante e 1 variabile)           
+                    opAI1 = *operando;
+                else if (opAI1)
+                    opAI2 = *operando;
             }
-            if (costanteNumerica && costanteNumerica->getValue().isPowerOf2()){      // Se constanteNumerica ha valore ed è una potenza di 2
-                outs() << "\n\t COSTANTE: " << costanteNumerica->getValue() << "\n \t OPERANDO: " << *operandoMoltiplicazione1 << "\n";
 
-                // ConstantInt::get() ritorna un valore di tipo ConstantInt
-                ConstantInt *shiftSinistra = ConstantInt::get(costanteNumerica->getType(), costanteNumerica->getValue().exactLogBase2());
-
-                outs() << costanteNumerica->getValue() << " è una potenza di due, ovvero 2^ " << shiftSinistra->getValue() << "\n";
-
-                // Creo la nuova istruzione di shift
-                Instruction *nuovoShift = BinaryOperator::Create(BinaryOperator::Shl, operandoMoltiplicazione1, shiftSinistra);
-
-                nuovoShift->insertAfter(moltiplicazione);           // Inserisco l'istruzione appena creata nella riga successiva alla
-                moltiplicazione->replaceAllUsesWith(nuovoShift);    // moltiplicazione che voglio sostituire
+            if(constAI && constAI->getValue().isZero()){
+                istruzione++;                                       // Incremento prima l'iteratore del BasicBlock perchè altrimenti farlo dopo incrementerebbe 
+                addizione->replaceAllUsesWith(opAI1);               // qualcosa di eliminato. Successivamente, con replaceAllUsesWith vado a sostituire il valore
+                addizione->eraseFromParent();                       // di X (es. X = Y + 0) con quello di Y. Di conseguenza, tutte le volte che verrà chiamato X
+                continue;                                           // andrò a rimpiazzarlo con Y.
             }
-        }
+
+        } else if (istruzione->getOpcode() == Instruction::Mul){
+            
+            BinaryOperator *moltiplicazione = dyn_cast<BinaryOperator>(istruzione);   // Puntatore all'istruzione corrente
+
+            ConstantInt* constAI = nullptr;
+            Value* opAI1 = nullptr;
+            Value* opAI2 = nullptr;
+
+            for (auto operando = istruzione->op_begin(); operando != istruzione->op_end(); ++operando) {
+
+                if (dyn_cast<ConstantInt>(operando))               // Se nella moltiplicazione esiste una costante numerica la salvo,         
+                    constAI = dyn_cast<ConstantInt>(operando);     // altrimenti vorrà dire che nella moltiplicazione ci saranno soltanto        
+                else if (!opAI1)                                   // 2 variabili. (e quindi non 1 costante e 1 variabile)                
+                    opAI1 = *operando;
+                else if (opAI1)
+                    opAI2 = *operando;
+            }
+
+            if(constAI && constAI->getValue().isOne()){
+                istruzione++;                                       // Incremento prima l'iteratore del BasicBlock perchè altrimenti farlo dopo incrementerebbe 
+                moltiplicazione->replaceAllUsesWith(opAI1);         // qualcosa di eliminato. Successivamente, con replaceAllUsesWith vado a sostituire il valore
+                moltiplicazione->eraseFromParent();                 // di X (es. X = Y + 0) con quello di Y. Di conseguenza, tutte le volte che verrà chiamato X
+                continue;                                           // andrò a rimpiazzarlo con Y.
+            }
+
+        } 
+        istruzione++;
     }
-
-    // Preleviamo le prime due istruzioni del BB
-    Instruction &Inst1st = *B.begin(), &Inst2nd = *(++B.begin());
-
-    // L'indirizzo della prima istruzione deve essere uguale a quello del
-    // primo operando della seconda istruzione (per costruzione dell'esempio)
-    assert(&Inst1st == Inst2nd.getOperand(0));
-
-    // Stampa la prima istruzione
-    // outs() << "PRIMA ISTRUZIONE: " << Inst1st << "\n";
-    // Stampa la prima istruzione come operando
-    // outs() << "COME OPERANDO: ";
-    // Inst1st.printAsOperand(outs(), false);
-    // outs() << "\n";
-
-    // User-->Use-->Value
-    // outs() << "I MIEI OPERANDI SONO:\n";
-    for (auto *Iter = Inst1st.op_begin(); Iter != Inst1st.op_end(); ++Iter) {
-        Value *Operand = *Iter;
-
-        if (Argument *Arg = dyn_cast<Argument>(Operand)) {
-        // outs() << "\t" << *Arg << ": SONO L'ARGOMENTO N. " << Arg->getArgNo() << " DELLA FUNZIONE " << Arg->getParent()->getName() << "\n";
-        }
-        if (ConstantInt *C = dyn_cast<ConstantInt>(Operand)) {
-        // outs() << "\t" << *C << ": SONO UNA COSTANTE INTERA DI VALORE " << C->getValue() << "\n";
-        }
-    }
-
-    // outs() << "LA LISTA DEI MIEI USERS:\n";
-    for (auto Iter = Inst1st.user_begin(); Iter != Inst1st.user_end(); ++Iter) {
-        // outs() << "\t" << *(dyn_cast<Instruction>(*Iter)) << "\n";
-    }
-
-    // outs() << "E DEI MIEI USI (CHE E' LA STESSA):\n";
-    for (auto Iter = Inst1st.use_begin(); Iter != Inst1st.use_end(); ++Iter) {
-        // outs() << "\t" << *(dyn_cast<Instruction>(Iter->getUser())) << "\n";
-    }
-
-    // Manipolazione delle istruzioni
-    Instruction *NewInst = BinaryOperator::Create(Instruction::Add, Inst1st.getOperand(0), Inst1st.getOperand(0));
-
-    NewInst->insertAfter(&Inst1st);
-    // Si possono aggiornare le singole references separatamente?
-    // Controlla la documentazione e prova a rispondere.
-    Inst1st.replaceAllUsesWith(NewInst);
-
     return true;
-    }
+}
 
-    bool runOnFunction(Function &F) {
+bool runOnFunction(Function &F) {
     bool Transformed = false;
 
     for (auto Iter = F.begin(); Iter != F.end(); ++Iter) {
