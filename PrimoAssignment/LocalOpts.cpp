@@ -7,6 +7,7 @@
         - [] Strength Reduction: 15*x = x*15 = (x<<4)-1 | y = x/8 -> y = x>>3
             - [] Controllare se l'operazione è una Instruction::Mul
             - [] Controllare se esiste una costante
+            - [] Calcolare se è potenza di due precisa oppure serve una somma/sottrazione
             - [] Creare le istruzioni
         - [] Multi-Instruction Optimization: a=b+1, c=a-1 -> a=b+1, c=b
 */
@@ -19,13 +20,13 @@ using namespace llvm;
 
 bool runOnBasicBlock(BasicBlock &B) {
 
-    for (auto istruzione = B.begin(); istruzione != B.end(); ++istruzione) {
+    for (auto istruzione = B.begin(); istruzione != B.end(); ) {
 
 //      -------------------- Algebraic Identity --------------------
         
         if (istruzione->getOpcode() == Instruction::Add){
             
-            BinaryOperator *addizione = dyn_cast<BinaryOperator>(istruzione);
+            BinaryOperator *addizione = dyn_cast<BinaryOperator>(istruzione);         // Puntatore all'istruzione corrente
 
             ConstantInt* constAI = nullptr;
             Value* opAI1 = nullptr;
@@ -42,13 +43,15 @@ bool runOnBasicBlock(BasicBlock &B) {
             }
 
             if(constAI && constAI->getValue().isZero()){
-                istruzione = addizione->eraseFromParent();          // Unlink dell'istruzione dal BasicBlock, ritorna il puntatore all'istruzione successiva.
-                istruzione--;                                       // Bisogna quindi decrementare istruzione all'istruzione precedente per evitare errori.
+                istruzione++;                                       // Incremento prima l'iteratore del BasicBlock perchè altrimenti farlo dopo incrementerebbe 
+                addizione->replaceAllUsesWith(opAI1);               // qualcosa di eliminato. Successivamente, con replaceAllUsesWith vado a sostituire il valore
+                addizione->eraseFromParent();                       // di X (es. X = Y + 0) con quello di Y. Di conseguenza, tutte le volte che verrà chiamato X
+                continue;                                           // andrò a rimpiazzarlo con Y.
             }
 
         } else if (istruzione->getOpcode() == Instruction::Mul){
             
-            BinaryOperator *moltiplicazione = dyn_cast<BinaryOperator>(istruzione);
+            BinaryOperator *moltiplicazione = dyn_cast<BinaryOperator>(istruzione);   // Puntatore all'istruzione corrente
 
             ConstantInt* constAI = nullptr;
             Value* opAI1 = nullptr;
@@ -65,11 +68,14 @@ bool runOnBasicBlock(BasicBlock &B) {
             }
 
             if(constAI && constAI->getValue().isOne()){
-                istruzione = moltiplicazione->eraseFromParent();    // Unlink dell'istruzione dal BasicBlock, ritorna il puntatore all'istruzione successiva.
-                istruzione--;                                       // Bisogna quindi decrementare istruzione all'istruzione precedente per evitare errori.
+                istruzione++;                                       // Incremento prima l'iteratore del BasicBlock perchè altrimenti farlo dopo incrementerebbe 
+                moltiplicazione->replaceAllUsesWith(opAI1);         // qualcosa di eliminato. Successivamente, con replaceAllUsesWith vado a sostituire il valore
+                moltiplicazione->eraseFromParent();                 // di X (es. X = Y + 0) con quello di Y. Di conseguenza, tutte le volte che verrà chiamato X
+                continue;                                           // andrò a rimpiazzarlo con Y.
             }
 
         } 
+        istruzione++;
     }
     return true;
 }
