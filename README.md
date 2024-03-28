@@ -2,19 +2,15 @@
 
 Aggiungere File.cpp: 
 - llvm-root/SRC/llvm/lib/Transforms/Utils/File.cpp
-_______________________
-
+<hr>
 Aggiungere "File.cpp" all'interno del file CMakeLists.txt
 - llvm-root/SRC/llvm/lib/Transforms/Utils/CMakeLists.txt
-_______________________
-
+<hr>
 Aggiungere File.h:
 - llvm-root/SRC/llvm/include/llvm/Transforms/Utils/File.h
-_______________________
-
+<hr>
 Modificare PassRegistry.def:
 - llvm-root/SRC/llvm/lib/Passes/PassRegistry.def
-_______________________
-
+<hr>
 Modificare PassBuilder.cpp aggiungendo il percorso del File.h:
 - llvm-root/SRC/llvm/lib/Passes/PassBuilder.cpp
