@@ -169,8 +169,7 @@ bool runOnBasicBlock(BasicBlock &B) {
 
         }
 
-//      -------------- Multi-Instruction Optimization --------------
-        
+
 
         istruzione++;
     }
