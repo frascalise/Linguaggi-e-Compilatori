@@ -4,7 +4,7 @@
             - [x] Controllare se l'operazione è una Instruction::Mul o Instruction::Add
             - [x] Controllare se esiste una costante e se è uguale ad 1 (Mul) o a 0 (Add)
             - [x] Rimuovere l'istruzione
-        - [] Strength Reduction: 15*x = x*15 = (x<<4)-1 | y = x/8 -> y = x>>3
+        - [] Strength Reduction: 15*x = x*15 = (x<<4)-x | y = x/8 -> y = x>>3
             - [x] Controllare se l'operazione è una Instruction::Mul o Instruction::SDiv
             - [x] Controllare se esiste una costante
             - [x] Calcolare se è potenza di due precisa oppure serve una somma/sottrazione
@@ -14,8 +14,11 @@
 */
 
 #include "llvm/Transforms/Utils/LocalOpts.h"
-#include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/InstrTypes.h"
+// L'include seguente va in LocalOpts.h
+#include <llvm/IR/Constants.h>
+
 
 using namespace llvm;
 
@@ -126,7 +129,7 @@ bool runOnBasicBlock(BasicBlock &B) {
                     }
                 } else {
 
-                    ConstantInt *shift = ConstantInt::get(constSR->getType(), constSR->getValue().nearestLogBase2());   // Trovo il logaritmo più vicino
+                    ConstantInt *shift = ConstantInt::get(constSR->getType(), constSR->getValue().ceilLogBase2());   // Trovo il logaritmo più vicino
                     outs() << "Shift: " << shift->getValue() << "\n";
 
                     if(istruzione->getOpcode() == Instruction::Mul) {
@@ -135,16 +138,32 @@ bool runOnBasicBlock(BasicBlock &B) {
                         Instruction *nuovoShift = BinaryOperator::Create(BinaryOperator::Shl, opSR1, shift);            // Creo la nuova operazione
 
                         nuovoShift->insertAfter(operazioneSR);                          // Inserisco l'istruzione appena creata nella riga successiva all'
-                        operazioneSR->replaceAllUsesWith(nuovoShift);                   // operazione che voglio sostituire e rimpiazzo tutti gli usi
                                                                                         // della vecchia operazione con il nuovo shift
-                        
-                        /*
-                            TODO:
-                                - Istruzione per calcolare il resto della somma
-                        */
+                        LLVMContext &context = shift->getContext();						//contesto necessario per funzioni successive
 
-                    //    Instruction *nuovoResto = BinaryOperator::Create(BinaryOperator::Add, opSR1, resto); 
-                    //    nuovoResto->insertAfter(nuovoShift);  
+                        //calcolo del resto
+                        APInt shiftValue = shift->getValue();
+						uint32_t potenza = 1;
+						for (auto i = 0; i < shiftValue.getLimitedValue(); i++) {		//getLimitedValue ritorna lo stesso valore di shiftValue (APInt) con tipo int 
+							potenza *= 2;												//calcolo il valore dello shift aggiunto precedentemente
+						}
+                        
+                        //RIGA DA CAMBIARE!!!!
+                        uint32_t restoIntero=potenza-constSR->getValue().getLimitedValue();				//valore del resto di tipo int 32
+                        
+                        Type *int32Type = Type::getInt32Ty(context);
+						Constant *restoConstant = ConstantInt::get(int32Type, APInt(32, restoIntero));		//valore del resto in una variabile di tipo Constant, necessario per creazione
+																											//dell'istruzione
+
+						Instruction *sottrazioneResto = BinaryOperator::Create(BinaryOperator::Sub, nuovoShift, restoConstant);		//istruzione di sottrazione del resto
+						
+
+						istruzione++;
+						sottrazioneResto->insertAfter(nuovoShift);
+                        operazioneSR->replaceAllUsesWith(sottrazioneResto);                   // operazione che voglio sostituire e rimpiazzo tutti gli usi
+						operazioneSR->eraseFromParent();
+						continue;                      
+                        
                         
                     } else if(istruzione->getOpcode() == Instruction::SDiv) {
                         outs() << ">> Strength Reduction Divisione, creo le istruzioni" << "\n";
@@ -152,16 +171,31 @@ bool runOnBasicBlock(BasicBlock &B) {
                         Instruction *nuovoShift = BinaryOperator::Create(BinaryOperator::LShr, opSR1, shift);            // Creo la nuova operazione
 
                         nuovoShift->insertAfter(operazioneSR);                          // Inserisco l'istruzione appena creata nella riga successiva all'
-                        operazioneSR->replaceAllUsesWith(nuovoShift);                   // operazione che voglio sostituire e rimpiazzo tutti gli usi
                                                                                         // della vecchia operazione con il nuovo shift
                         
-                        /*
-                            TODO:
-                                - Istruzione per calcolare il resto della sottrazione
-                        */
+                        LLVMContext &context = shift->getContext();						//contesto necessario per funzioni successive
 
-                    //    Instruction *nuovoResto = BinaryOperator::Create(BinaryOperator::Sub, opSR1, resto); 
-                    //    nuovoResto->insertAfter(nuovoShift);                          
+                        //calcolo del resto
+                        APInt shiftValue = shift->getValue();
+						uint32_t potenza = 1;
+						for (auto i = 0; i < shiftValue.getLimitedValue(); i++) {		//getLimitedValue ritorna lo stesso valore di shiftValue (APInt) con tipo int 
+							potenza *= 2;												//calcolo il valore dello shift aggiunto precedentemente
+						}
+                        
+                        //RIGA DA CAMBIARE
+                        uint32_t restoIntero=potenza-constSR->getValue().getLimitedValue();				//valore del resto di tipo int 32
+                        
+                        Type *int32Type = Type::getInt32Ty(context);
+						Constant *restoConstant = ConstantInt::get(int32Type, APInt(32, restoIntero));		//valore del resto in una variabile di tipo Constant, necessario per creazione
+																											//dell'istruzione
+
+						Instruction *addizioneResto = BinaryOperator::Create(BinaryOperator::Add, nuovoShift, restoConstant);		//istruzione di addizione del resto
+						
+						istruzione++;
+						addizioneResto->insertAfter(nuovoShift);
+                        operazioneSR->replaceAllUsesWith(addizioneResto);                   // operazione che voglio sostituire e rimpiazzo tutti gli usi
+						operazioneSR->eraseFromParent();
+						continue;                      
                         
                     }
                 }
@@ -169,30 +203,31 @@ bool runOnBasicBlock(BasicBlock &B) {
 
         }
 
-//      -------------- Multi-Instruction Optimization --------------
-        
 
+	
         istruzione++;
     }
     return true;
 }
 
 bool runOnFunction(Function &F) {
-    bool Transformed = false;
+  bool Transformed = false;
 
-    for (auto Iter = F.begin(); Iter != F.end(); ++Iter) {
-        if (runOnBasicBlock(*Iter)) {
-        Transformed = true;
-        }
+  for (auto Iter = F.begin(); Iter != F.end(); ++Iter) {
+    if (runOnBasicBlock(*Iter)) {
+      Transformed = true;
     }
+  }
 
-    return Transformed;
+  return Transformed;
 }
 
-PreservedAnalyses LocalOpts::run(Module &M, ModuleAnalysisManager &AM) {
-    for (auto Fiter = M.begin(); Fiter != M.end(); ++Fiter)
-        if (runOnFunction(*Fiter))
-        return PreservedAnalyses::none();
 
-    return PreservedAnalyses::all();
+PreservedAnalyses LocalOpts::run(Module &M,ModuleAnalysisManager &AM) {
+  for (auto Fiter = M.begin(); Fiter != M.end(); ++Fiter)
+    if (runOnFunction(*Fiter))
+      return PreservedAnalyses::none();
+  
+  return PreservedAnalyses::all();
 }
+
