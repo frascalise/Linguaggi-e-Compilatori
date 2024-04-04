@@ -1,24 +1,16 @@
 Installazione del passo File.cpp:
 
-<b>Aggiungere File.cpp</b> <br>
+Aggiungere File.cpp <br>
 llvm-root/SRC/llvm/lib/Transforms/Utils/File.cpp
-  
 <hr>
-
-<b>Aggiungere "File.cpp" all'interno del file CMakeLists.txt</b> <br>
+Aggiungere "File.cpp" all'interno del file CMakeLists.txt <br>
 llvm-root/SRC/llvm/lib/Transforms/Utils/CMakeLists.txt
-  
 <hr>
-
-<b>Aggiungere File.h:</b> <br>
+Aggiungere File.h:<br>
 llvm-root/SRC/llvm/include/llvm/Transforms/Utils/File.h
-
 <hr>
-
-<b>Modificare PassRegistry.def:</b> <br>
+Modificare PassRegistry.def: <br>
 llvm-root/SRC/llvm/lib/Passes/PassRegistry.def
-
 <hr>
-
-<b>Modificare PassBuilder.cpp aggiungendo il percorso del File.h:</b> <br>
+Modificare PassBuilder.cpp aggiungendo il percorso del File.h:<br>
 llvm-root/SRC/llvm/lib/Passes/PassBuilder.cpp
