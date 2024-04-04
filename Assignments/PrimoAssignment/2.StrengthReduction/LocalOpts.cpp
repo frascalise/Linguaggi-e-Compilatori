@@ -189,6 +189,11 @@ bool runOnBasicBlock(BasicBlock &B) {
                         // FIXME: Sistemare questa riga
                         uint32_t restoIntero = potenza - constSR->getValue().getLimitedValue();				// valore del resto di tipo int 32
                         
+                        // NOTE: Non si riesce a calcolare il valore da sottrarre/aggiungere poichè il valore numerico
+                        // non si può prendere in quanto appartiene ad una istruzione che non è stata ancora eseguita
+                        // e di conseguenza non esiste. L'unico modo per farlo è se la costante numerica è vicino a quella
+                        // della potenza calcolata (vicino di 1, quindi x*15 -> x*16 - x)
+
                         Type *int32Type = Type::getInt32Ty(context);
 						Constant *restoConstant = ConstantInt::get(int32Type, APInt(32, restoIntero));		// valore del resto in una variabile di tipo Constant, necessario per creazione
 																											// dell'istruzione
