@@ -140,7 +140,7 @@ bool runOnBasicBlock(BasicBlock &B) {
                         
                         /*
                             TODO:
-                                - Istruzione per calcolare il resto della somma
+                                - Istruzione per calcolare il resto
                         */
 
                     //    Instruction *nuovoResto = BinaryOperator::Create(BinaryOperator::Add, opSR1, resto); 
@@ -157,7 +157,7 @@ bool runOnBasicBlock(BasicBlock &B) {
                         
                         /*
                             TODO:
-                                - Istruzione per calcolare il resto della sottrazione
+                                - Istruzione per calcolare il resto
                         */
 
                     //    Instruction *nuovoResto = BinaryOperator::Create(BinaryOperator::Sub, opSR1, resto); 
