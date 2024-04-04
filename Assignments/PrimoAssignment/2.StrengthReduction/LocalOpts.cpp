@@ -32,7 +32,7 @@ bool runOnBasicBlock(BasicBlock &B) {
                                   // se si è entrati prima in Algebraic Identity con una moltiplicazione
 
 //      -------------------- Algebraic Identity --------------------
-        if (istruzione->getOpcode() == Instruction::Add){
+        if (istruzione->getOpcode() == Instruction::Add) {
             
             BinaryOperator *addizione = dyn_cast<BinaryOperator>(istruzione);         // Puntatore all'istruzione corrente
 
@@ -56,7 +56,6 @@ bool runOnBasicBlock(BasicBlock &B) {
                 addizione->eraseFromParent();                       // di X (es. X = Y + 0) con quello di Y. Di conseguenza, tutte le volte che verrà chiamato X
                 continue;                                           // andrò a rimpiazzarlo con Y.
             }
-
         } else if (istruzione->getOpcode() == Instruction::Mul){
 
             BinaryOperator *moltiplicazione = dyn_cast<BinaryOperator>(istruzione);   // Puntatore all'istruzione corrente
@@ -139,7 +138,7 @@ bool runOnBasicBlock(BasicBlock &B) {
 
                         nuovoShift->insertAfter(operazioneSR);                          // Inserisco l'istruzione appena creata nella riga successiva all'
                                                                                         // della vecchia operazione con il nuovo shift
-                        LLVMContext &context = shift->getContext();						//contesto necessario per funzioni successive
+                        LLVMContext &context = shift->getContext();						// contesto necessario per funzioni successive
 
                         //calcolo del resto
                         APInt shiftValue = shift->getValue();
@@ -148,7 +147,7 @@ bool runOnBasicBlock(BasicBlock &B) {
 							potenza *= 2;												//calcolo il valore dello shift aggiunto precedentemente
 						}
                         
-                        //RIGA DA CAMBIARE!!!!
+                        // FIXME: Sistemare questa riga
                         uint32_t restoIntero=potenza-constSR->getValue().getLimitedValue();				//valore del resto di tipo int 32
                         
                         Type *int32Type = Type::getInt32Ty(context);
@@ -175,14 +174,14 @@ bool runOnBasicBlock(BasicBlock &B) {
                         
                         LLVMContext &context = shift->getContext();						//contesto necessario per funzioni successive
 
-                        //calcolo del resto
+                        // calcolo del resto
                         APInt shiftValue = shift->getValue();
 						uint32_t potenza = 1;
 						for (auto i = 0; i < shiftValue.getLimitedValue(); i++) {		//getLimitedValue ritorna lo stesso valore di shiftValue (APInt) con tipo int 
 							potenza *= 2;												//calcolo il valore dello shift aggiunto precedentemente
 						}
                         
-                        //RIGA DA CAMBIARE
+                        // FIXME: Sistemare questa riga
                         uint32_t restoIntero=potenza-constSR->getValue().getLimitedValue();				//valore del resto di tipo int 32
                         
                         Type *int32Type = Type::getInt32Ty(context);
