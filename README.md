@@ -1,3 +1,9 @@
+<h2>Struttura Cartelle</h2>
+- Esercizi: Passi/File/Esempi delle lezioni
+- Assignments: Assignment da consegnare
+
+<hr><hr>
+
 Installazione del passo File.cpp:
 
 Aggiungere File.cpp <br>
