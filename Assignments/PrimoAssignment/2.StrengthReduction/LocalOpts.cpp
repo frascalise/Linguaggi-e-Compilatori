@@ -147,7 +147,7 @@ bool runOnBasicBlock(BasicBlock &B) {
 							potenza *= 2;												//calcolo il valore dello shift aggiunto precedentemente
 						}
                         
-                        // FIXME: Sistemare questa riga
+                        // FIXME: Sistemare questa riga 
                         uint32_t restoIntero=potenza-constSR->getValue().getLimitedValue();				//valore del resto di tipo int 32
                         
                         Type *int32Type = Type::getInt32Ty(context);
