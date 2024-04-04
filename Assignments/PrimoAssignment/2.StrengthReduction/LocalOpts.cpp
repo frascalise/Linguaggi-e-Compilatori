@@ -140,21 +140,26 @@ bool runOnBasicBlock(BasicBlock &B) {
                                                                                         // della vecchia operazione con il nuovo shift
                         LLVMContext &context = shift->getContext();						// contesto necessario per funzioni successive
 
-                        //calcolo del resto
+                        // calcolo del resto
                         APInt shiftValue = shift->getValue();
 						uint32_t potenza = 1;
-						for (auto i = 0; i < shiftValue.getLimitedValue(); i++) {		//getLimitedValue ritorna lo stesso valore di shiftValue (APInt) con tipo int 
-							potenza *= 2;												//calcolo il valore dello shift aggiunto precedentemente
+						for (auto i = 0; i < shiftValue.getLimitedValue(); i++) {		// getLimitedValue ritorna lo stesso valore di shiftValue (APInt) con tipo int 
+							potenza *= 2;												// calcolo il valore dello shift aggiunto precedentemente
 						}
                         
-                        // FIXME: Sistemare questa riga 
-                        uint32_t restoIntero=potenza-constSR->getValue().getLimitedValue();				//valore del resto di tipo int 32
+                        // FIXME: Sistemare questa riga
+                        uint32_t restoIntero = potenza - constSR->getValue().getLimitedValue();				// valore del resto di tipo int 32
                         
-                        Type *int32Type = Type::getInt32Ty(context);
-						Constant *restoConstant = ConstantInt::get(int32Type, APInt(32, restoIntero));		//valore del resto in una variabile di tipo Constant, necessario per creazione
-																											//dell'istruzione
+                        // NOTE: Non si riesce a calcolare il valore da sottrarre/aggiungere poichè il valore numerico
+                        // non si può prendere in quanto appartiene ad una istruzione che non è stata ancora eseguita
+                        // e di conseguenza non esiste. L'unico modo per farlo è se la costante numerica è vicino a quella
+                        // della potenza calcolata (vicino di 1, quindi x*15 -> x*16 - x)
 
-						Instruction *sottrazioneResto = BinaryOperator::Create(BinaryOperator::Sub, nuovoShift, restoConstant);		//istruzione di sottrazione del resto
+                        Type *int32Type = Type::getInt32Ty(context);
+						Constant *restoConstant = ConstantInt::get(int32Type, APInt(32, restoIntero));		// valore del resto in una variabile di tipo Constant, necessario per creazione
+																											// dell'istruzione
+
+						Instruction *sottrazioneResto = BinaryOperator::Create(BinaryOperator::Sub, nuovoShift, restoConstant);		// istruzione di sottrazione del resto
 						
 
 						istruzione++;
@@ -177,18 +182,18 @@ bool runOnBasicBlock(BasicBlock &B) {
                         // calcolo del resto
                         APInt shiftValue = shift->getValue();
 						uint32_t potenza = 1;
-						for (auto i = 0; i < shiftValue.getLimitedValue(); i++) {		//getLimitedValue ritorna lo stesso valore di shiftValue (APInt) con tipo int 
-							potenza *= 2;												//calcolo il valore dello shift aggiunto precedentemente
+						for (auto i = 0; i < shiftValue.getLimitedValue(); i++) {		// getLimitedValue ritorna lo stesso valore di shiftValue (APInt) con tipo int 
+							potenza *= 2;												// calcolo il valore dello shift aggiunto precedentemente
 						}
                         
                         // FIXME: Sistemare questa riga
-                        uint32_t restoIntero=potenza-constSR->getValue().getLimitedValue();				//valore del resto di tipo int 32
+                        uint32_t restoIntero = potenza - constSR->getValue().getLimitedValue();				// valore del resto di tipo int 32
                         
                         Type *int32Type = Type::getInt32Ty(context);
-						Constant *restoConstant = ConstantInt::get(int32Type, APInt(32, restoIntero));		//valore del resto in una variabile di tipo Constant, necessario per creazione
-																											//dell'istruzione
+						Constant *restoConstant = ConstantInt::get(int32Type, APInt(32, restoIntero));		// valore del resto in una variabile di tipo Constant, necessario per creazione
+																											// dell'istruzione
 
-						Instruction *addizioneResto = BinaryOperator::Create(BinaryOperator::Add, nuovoShift, restoConstant);		//istruzione di addizione del resto
+						Instruction *addizioneResto = BinaryOperator::Create(BinaryOperator::Add, nuovoShift, restoConstant);		// istruzione di addizione del resto
 						
 						istruzione++;
 						addizioneResto->insertAfter(nuovoShift);
