@@ -1,4 +1,4 @@
-<h2>Installazione del passo File.cpp:</h2>
+Installazione del passo File.cpp:
 
 <b>Aggiungere File.cpp</b> <br>
 llvm-root/SRC/llvm/lib/Transforms/Utils/File.cpp
