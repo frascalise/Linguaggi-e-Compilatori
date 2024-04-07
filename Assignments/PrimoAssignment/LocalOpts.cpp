@@ -143,7 +143,6 @@ bool strenghtReduction(llvm::BasicBlock::iterator &istruzione){
 
                 Instruction *sottrazioneResto = BinaryOperator::Create(BinaryOperator::Sub, nuovoShift, restoConstant);		// istruzione di sottrazione del resto
                 
-
                 istruzione++;
                 sottrazioneResto->insertAfter(nuovoShift);
                 operazioneSR->replaceAllUsesWith(sottrazioneResto);                   // operazione che voglio sostituire e rimpiazzo tutti gli usi
