@@ -10,7 +10,7 @@
             - [x] Calcolare se è potenza di due precisa oppure serve una somma/sottrazione
                 - [] Nel caso calcolare la differenza dello shift
             - [x] Creare le istruzioni
-        - [] Multi-Instruction Optimization: a=b+1, c=a-1 -> a=b+1, c=b
+        - [x] Multi-Instruction Optimization: a=b+1, c=a-1 -> a=b+1, c=b
 */
 
 #include "llvm/Transforms/Utils/LocalOpts.h"
@@ -24,7 +24,7 @@ using namespace llvm;
 
 /*  Verifica che l'istruzione sia di nostro interesse per l'ottimizzazione: ai fini di questo passo è necessario 
     che l'istruzione da ottimizzare contenga una variabile e una costante */
-bool optimizable(llvm::BasicBlock::iterator &istruzione, ConstantInt* &constVal, Value* &opVal){
+bool optimizable(Instruction* istruzione, ConstantInt* &constVal, Value* &opVal){
     for (auto operando = istruzione->op_begin(); operando != istruzione->op_end(); ++operando) {
         if (dyn_cast<ConstantInt>(operando))
             constVal = dyn_cast<ConstantInt>(operando); 
@@ -38,12 +38,11 @@ bool optimizable(llvm::BasicBlock::iterator &istruzione, ConstantInt* &constVal,
     return false;
 }
 
-
 bool algebraicIdentity(llvm::BasicBlock::iterator &istruzione){
     ConstantInt* constVal = nullptr;
     Value* opVal = nullptr;
 
-    if(!optimizable(istruzione, constVal, opVal)) return false;
+    if(!optimizable(&*istruzione, constVal, opVal)) return false;
 
     if (istruzione->getOpcode() == Instruction::Add){
         
@@ -78,7 +77,7 @@ bool strenghtReduction(llvm::BasicBlock::iterator &istruzione){
     ConstantInt* constVal = nullptr;
     Value* opVal = nullptr;
 
-    if(!optimizable(istruzione, constVal, opVal)) return false;
+    if(!optimizable(&*istruzione, constVal, opVal)) return false;
 
     if ((istruzione->getOpcode() == Instruction::Mul || istruzione->getOpcode() == Instruction::SDiv)){
 
@@ -199,11 +198,11 @@ bool strenghtReduction(llvm::BasicBlock::iterator &istruzione){
 /*  Per ogni istruzione ottimizzabile viene memorizzato nella variabile def il riferimento all'istruzione (unica) che definisce
     la variabile utilizzata. In questo modo, confrontando l'istruzione in fase di ottimizzazione con l'istruzione che definisce la variabile
     utilizzata, è possibile eliminare eventuali passi inutili */
-bool multiInstrOpt(llvm::BasicBlock::iterator& istruzione){
+bool multiInstrOpt(llvm::BasicBlock::iterator &istruzione){
     ConstantInt* constVal = nullptr;
     Value* opVal = nullptr;
 
-    if(!optimizable(istruzione, constVal, opVal)) return false;
+    if(!optimizable(&*istruzione, constVal, opVal)) return false;
 
     /*  Se la variabile non corrisponde ad un'istruzione significa che è presa dai parametri della funzione
         e sicuramente non c'è nulla da ottimizzare */
@@ -212,8 +211,14 @@ bool multiInstrOpt(llvm::BasicBlock::iterator& istruzione){
         return false;
     }
 
+    ConstantInt* defConstVal = nullptr;
+    Value* defOpVal = nullptr;
+
     BinaryOperator *currentIstr = dyn_cast<BinaryOperator>(istruzione);   // Puntatore all'istruzione corrente
 
+    /*  In caso l'istruzione sia una sub o una sdiv la condizione per l'ottimizzazione è diversa da add e mul in quanto sub e sdiv possono 
+        "reversare" una add e una mul indipendentemente dall'ordine in cui compaiono costante e variabile (commutative). Per add e mul, invece,
+        non vale questa proprietà perchè possono reversare solo sub e sdiv in cui la costante compare come secondo operatore */
     switch(istruzione->getOpcode()){
         /*
             a=b-1
@@ -238,12 +243,11 @@ bool multiInstrOpt(llvm::BasicBlock::iterator& istruzione){
         */
         case Instruction::Sub:
             if(def->getOpcode() == Instruction::Add){
-                //qui non so perchè funziona anche se la costante è il primo operatore (giusto, ma non l'ho fatto apposta) (INDAGHERO!)
-                if (ConstantInt* defConstVal = dyn_cast<ConstantInt>(def->getOperand(1))){
+                if (optimizable(def, defConstVal, defOpVal)){
                     if(constVal->getSExtValue() == defConstVal->getSExtValue())
                         outs() << ">> Multi Instruction Optimization [SUB/ADD]" << *istruzione << "\n";
                         istruzione++;
-                        currentIstr->replaceAllUsesWith(def->getOperand(0));                  
+                        currentIstr->replaceAllUsesWith(defOpVal);                  
                         currentIstr->eraseFromParent();
                         return true;      
                 }  
@@ -273,11 +277,11 @@ bool multiInstrOpt(llvm::BasicBlock::iterator& istruzione){
         */
         case Instruction::SDiv:
             if(def->getOpcode() == Instruction::Mul){
-                if (ConstantInt* defConstVal = dyn_cast<ConstantInt>(def->getOperand(1))){
+                if (optimizable(def, defConstVal, defOpVal)){
                     if(constVal->getSExtValue() == defConstVal->getSExtValue())
                         outs() << ">> Multi Instruction Optimization [MUL/SDIV]" << *istruzione << "\n";
                         istruzione++;
-                        currentIstr->replaceAllUsesWith(def->getOperand(0));                  
+                        currentIstr->replaceAllUsesWith(defOpVal);                  
                         currentIstr->eraseFromParent();
                         return true;      
                 }  
@@ -297,7 +301,6 @@ bool runOnBasicBlock(BasicBlock &B) {
     while (istruzione != B.end()) {
 
         outs() << "ISTRUZIONE: " << *istruzione << "\n";
-
 //      -------------------- Algebraic Identity --------------------
         if(algebraicIdentity(istruzione)){
             continue;
