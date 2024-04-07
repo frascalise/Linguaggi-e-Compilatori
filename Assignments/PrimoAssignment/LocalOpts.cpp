@@ -114,79 +114,6 @@ bool strenghtReduction(llvm::BasicBlock::iterator &istruzione){
 			bool add=false;
 
 
-<<<<<<< HEAD
-                Instruction *nuovoShift = BinaryOperator::Create(BinaryOperator::Shl, opVal, shift);            // Creo la nuova operazione
-
-                nuovoShift->insertAfter(operazioneSR);                          // Inserisco l'istruzione appena creata nella riga successiva all'
-                                                                                // della vecchia operazione con il nuovo shift
-                LLVMContext &context = shift->getContext();						// contesto necessario per funzioni successive
-
-                // calcolo del resto
-                APInt shiftValue = shift->getValue();
-                uint32_t potenza = 1;
-                for (auto i = 0; i < shiftValue.getLimitedValue(); i++) {		// getLimitedValue ritorna lo stesso valore di shiftValue (APInt) con tipo int 
-                    potenza *= 2;												// calcolo il valore dello shift aggiunto precedentemente
-                }
-                
-                // FIXME: Sistemare questa riga
-                uint32_t restoIntero = potenza - constVal->getValue().getLimitedValue();				// valore del resto di tipo int 32
-                
-                // NOTE: Non si riesce a calcolare il valore da sottrarre/aggiungere poichè il valore numerico
-                // non si può prendere in quanto appartiene ad una istruzione che non è stata ancora eseguita
-                // e di conseguenza non esiste. L'unico modo per farlo è se la costante numerica è vicino a quella
-                // della potenza calcolata (vicino di 1, quindi x*15 -> x*16 - x)
-
-                Type *int32Type = Type::getInt32Ty(context);
-                Constant *restoConstant = ConstantInt::get(int32Type, APInt(32, restoIntero));		// valore del resto in una variabile di tipo Constant, necessario per creazione
-                                                                                                    // dell'istruzione
-
-                Instruction *sottrazioneResto = BinaryOperator::Create(BinaryOperator::Sub, nuovoShift, restoConstant);		// istruzione di sottrazione del resto
-                
-                istruzione++;
-                sottrazioneResto->insertAfter(nuovoShift);
-                operazioneSR->replaceAllUsesWith(sottrazioneResto);                   // operazione che voglio sostituire e rimpiazzo tutti gli usi
-                operazioneSR->eraseFromParent();
-                return true;                      
-                
-                
-            } else if(istruzione->getOpcode() == Instruction::SDiv) {
-                outs() << ">> Strength Reduction Divisione, creo le istruzioni" << "\n";
-
-                Instruction *nuovoShift = BinaryOperator::Create(BinaryOperator::LShr, opVal, shift);            // Creo la nuova operazione
-
-                nuovoShift->insertAfter(operazioneSR);                          // Inserisco l'istruzione appena creata nella riga successiva all'
-                                                                                // della vecchia operazione con il nuovo shift
-                
-                LLVMContext &context = shift->getContext();						//contesto necessario per funzioni successive
-
-                // calcolo del resto
-                APInt shiftValue = shift->getValue();
-                uint32_t potenza = 1;
-                for (auto i = 0; i < shiftValue.getLimitedValue(); i++) {		// getLimitedValue ritorna lo stesso valore di shiftValue (APInt) con tipo int 
-                    potenza *= 2;												// calcolo il valore dello shift aggiunto precedentemente
-                }
-                
-                // FIXME: Sistemare questa riga
-                uint32_t restoIntero = potenza - constVal->getValue().getLimitedValue();				// valore del resto di tipo int 32
-                
-                // NOTE: Non si riesce a calcolare il valore da sottrarre/aggiungere poichè il valore numerico
-                // non si può prendere in quanto appartiene ad una istruzione che non è stata ancora eseguita
-                // e di conseguenza non esiste. L'unico modo per farlo è se la costante numerica è vicino a quella
-                // della potenza calcolata (vicino di 1, quindi x*15 -> x*16 - x)
-
-                Type *int32Type = Type::getInt32Ty(context);
-                Constant *restoConstant = ConstantInt::get(int32Type, APInt(32, restoIntero));		// valore del resto in una variabile di tipo Constant, necessario per creazione
-                                                                                                    // dell'istruzione
-
-                Instruction *addizioneResto = BinaryOperator::Create(BinaryOperator::Add, nuovoShift, restoConstant);		// istruzione di addizione del resto
-                
-                istruzione++;
-                addizioneResto->insertAfter(nuovoShift);
-                operazioneSR->replaceAllUsesWith(addizioneResto);                   // operazione che voglio sostituire e rimpiazzo tutti gli usi
-                operazioneSR->eraseFromParent();
-                return true;                      
-                
-=======
             //calcolo del resto
             APInt shiftValue = shift->getValue();
 			uint32_t potenza = 1;
@@ -201,7 +128,6 @@ bool strenghtReduction(llvm::BasicBlock::iterator &istruzione){
             else{
             	restoIntero=valInteroCostante-potenza;
             	add=true;
->>>>>>> 3493cdb6b5c7479f6068a1fce015a6b7992503b2
             }
 
 			if(restoIntero==1 && istruzione->getOpcode() == Instruction::Mul) {
