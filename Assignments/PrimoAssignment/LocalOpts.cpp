@@ -4,11 +4,11 @@
             - [x] Controllare se l'operazione è una Instruction::Mul o Instruction::Add
             - [x] Controllare se esiste una costante e se è uguale ad 1 (Mul) o a 0 (Add)
             - [x] Rimuovere l'istruzione
-        - [] Strength Reduction: 15*x = x*15 = (x<<4)-x | y = x/8 -> y = x>>3
+        - [x] Strength Reduction: 15*x = x*15 = (x<<4)-x | y = x/8 -> y = x>>3
             - [x] Controllare se l'operazione è una Instruction::Mul o Instruction::SDiv
             - [x] Controllare se esiste una costante
             - [x] Calcolare se è potenza di due precisa oppure serve una somma/sottrazione
-                - [] Nel caso calcolare la differenza dello shift
+                - [x] Nel caso calcolare la differenza dello shift
             - [x] Creare le istruzioni
         - [x] Multi-Instruction Optimization: a=b+1, c=a-1 -> a=b+1, c=b
 */
@@ -110,12 +110,11 @@ bool strenghtReduction(llvm::BasicBlock::iterator &istruzione){
             }
         } else {
 
-            ConstantInt *shift = ConstantInt::get(constVal->getType(), constVal->getValue().ceilLogBase2());   // Trovo il logaritmo più vicino
-            outs() << "Shift: " << shift->getValue() << "\n";
+            ConstantInt *shift = ConstantInt::get(constVal->getType(), constVal->getValue().nearestLogBase2());   // Trovo il logaritmo più vicino
+			bool add=false;
 
-            if(istruzione->getOpcode() == Instruction::Mul) {
-                outs() << ">> Strength Reduction [MUL] (not perfect power)" << *istruzione << "\n";
 
+<<<<<<< HEAD
                 Instruction *nuovoShift = BinaryOperator::Create(BinaryOperator::Shl, opVal, shift);            // Creo la nuova operazione
 
                 nuovoShift->insertAfter(operazioneSR);                          // Inserisco l'istruzione appena creata nella riga successiva all'
@@ -187,7 +186,47 @@ bool strenghtReduction(llvm::BasicBlock::iterator &istruzione){
                 operazioneSR->eraseFromParent();
                 return true;                      
                 
+=======
+            //calcolo del resto
+            APInt shiftValue = shift->getValue();
+			uint32_t potenza = 1;
+			for (auto i = 0; i < shiftValue.getSExtValue(); i++) {		
+				potenza *= 2;												
+			}
+            
+			uint32_t valInteroCostante=constVal->getValue().getSExtValue();
+			uint32_t restoIntero;
+            if (potenza>valInteroCostante)
+            	restoIntero=potenza-valInteroCostante;				//valore del resto di tipo int 32
+            else{
+            	restoIntero=valInteroCostante-potenza;
+            	add=true;
+>>>>>>> 3493cdb6b5c7479f6068a1fce015a6b7992503b2
             }
+
+			if(restoIntero==1 && istruzione->getOpcode() == Instruction::Mul) {
+
+		        Instruction *nuovoShift = BinaryOperator::Create(BinaryOperator::Shl, opVal, shift);            // Creo la nuova operazione
+
+		        nuovoShift->insertAfter(operazioneSR);                          // Inserisco l'istruzione appena creata nella riga successiva all'
+		                                                                        // della vecchia operazione con il nuovo shift
+		        
+		        
+				Instruction *istruzioneResto;
+				if(add)
+					istruzioneResto = BinaryOperator::Create(BinaryOperator::Add, nuovoShift, opVal);		//istruzione di addizione del resto
+				else
+					istruzioneResto = BinaryOperator::Create(BinaryOperator::Sub, nuovoShift, opVal);		//istruzione di sottrazione del resto
+				
+                outs() << ">> Strength Reduction [MUL]" << *istruzione << "\n";
+				istruzione++;
+				istruzioneResto->insertAfter(nuovoShift);
+		        operazioneSR->replaceAllUsesWith(istruzioneResto);                   // operazione che voglio sostituire e rimpiazzo tutti gli usi
+				operazioneSR->eraseFromParent();
+	            return true;
+	                    
+	                
+        	}
         }
     }
 
@@ -300,17 +339,14 @@ bool runOnBasicBlock(BasicBlock &B) {
     while (istruzione != B.end()) {
 
         outs() << "ISTRUZIONE: " << *istruzione << "\n";
-//      -------------------- Algebraic Identity --------------------
         if(algebraicIdentity(istruzione)){
             continue;
         }
-//      -------------------- Strength Reduction --------------------
-        /*FIXME: questo mi cattura tutte le mul e sdiv e non si arriva mai nell'ultima ottimizzazione, possiamo risolvere
-            facendo più cicli oppure cambiando questa funzione in modo che prenda solo le istruzioni con la costante vicina alla potenza perfetta, ciao*/
-        /*if(strenghtReduction(istruzione)){
+
+        if(strenghtReduction(istruzione)){
             continue;
-        }*/
-//      ----------------- Multi Instruction Opt --------------------
+        }
+
         if(multiInstrOpt(istruzione)){
             continue;
         }
