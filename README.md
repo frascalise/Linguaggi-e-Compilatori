@@ -21,3 +21,16 @@ llvm-root/SRC/llvm/lib/Passes/PassRegistry.def
 
 Modificare PassBuilder.cpp aggiungendo il percorso del File.h:<br>
 llvm-root/SRC/llvm/lib/Passes/PassBuilder.cpp
+
+<hr><hr>
+
+<h3>Eseguire un passo dopo una modifica</h3>
+
+ninja opt <br>
+llvm-root/BUILD
+
+ninja install <br>
+llvm-root/BUILD
+
+opt -p nome_passo File.ll -o File.optimized.ll <br>
+llvm-root/TEST
