@@ -168,11 +168,20 @@ PreservedAnalyses LoopWalk::run(Loop &L,
         }
     }
 
-    outs()<<"\n----- MOVING INSTRUCTIONS IN PREHEADER -----\n";
+    outs()<<"\n----- MOVING INSTRUCTIONS TO PREHEADER -----\n";
     BasicBlock* preheader = L.getLoopPreheader();
-    if(preheader) outs()<<*preheader<<'\n';
-    //TODO tutta questa parte
+    // TODO: Valutare cosa fare di questa riga qua sotto
+    if(preheader) {
+        outs()<<"[Preheader found]\t"<<*preheader<<'\n';
+        for (auto instr : candidates){
+            instr->moveBefore(preheader->getTerminator());
+            outs()<<"[Moved to preheader]\t"<<*instr<<"\n";
+        }
+    } else {
+        outs()<<"[No preheader found]\n";
+    }
+    //TODO: tutta questa parte
 
-    return PreservedAnalyses::all();
+    return PreservedAnalyses::none();
 }
 
