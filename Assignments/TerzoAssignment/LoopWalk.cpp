@@ -87,7 +87,9 @@ bool dominatesAllExits(Instruction* instr, SmallVector<BasicBlock*> exitingBB, D
 }
 
 /*  Verifica che la variabile definita con questa istruzione non abbia, in realtà, altre definizioni in altre parti del loop.
-    Questo controllo viene effettuato verificando che nessun user della variabile corrisponda ad un PHI node    */
+    Questo controllo viene effettuato verificando che nessun user della variabile corrisponda ad un PHI node.   
+    Se per esempio una variabile è data da due argomenti che soddisfano la LoopInvarianza, ma almeno uno di quest definiti in un if, 
+    non si può spostare fuori dal loop. */
 bool multipleDefinitions(Instruction* instr){
     for(auto use = instr->user_begin(); use != instr->user_end(); use++){
         PHINode* phi;
@@ -98,6 +100,31 @@ bool multipleDefinitions(Instruction* instr){
         }    
     }
 
+    return true;
+}
+
+/* Verifica che l'istruzione domini tutti i suoi utilizzi all'interno dei blocchi del loop.
+    Questo controllo è necessario per evitare che l'istruzione venga spostata prima di un suo utilizzo. */
+bool dominatesAllUses(Instruction* instr, DominatorTree &DT){
+    for(auto use = instr->use_begin(); use != instr->use_end(); use++){
+        //outs()<<"[Use]\t"<<*((use)->get())<<"\n";
+        if(!DT.dominates(instr, *use)){
+            return false;
+        }
+    }
+
+    return true;
+}
+/*
+    FIXME: Questa funzione non è corretta
+*/
+bool isDeadAfterLoop(Instruction* instr, SmallVector<BasicBlock*> successorBB){
+    for(auto use = instr->user_begin(); use != instr->user_end(); use++){
+        if(std::find(successorBB.begin(), successorBB.end(), dyn_cast<Instruction>(*use)->getParent()) != successorBB.end()){
+            return false;
+        }
+    }
+    outs()<<"[Dead after loop]\t"<<*instr<<"\n";
     return true;
 }
 
@@ -142,6 +169,8 @@ PreservedAnalyses LoopWalk::run(Loop &L,
     DominatorTree &DT = LAR.DT;
     SmallVector<BasicBlock*> exitingBB;
     L.getExitingBlocks(exitingBB);
+    SmallVector<BasicBlock*> successorBB;
+    L.getExitBlocks(successorBB);
 
     outs()<<"\n----- CHECKING CODE MOTION CONDITIONS -----\n";
 
@@ -153,7 +182,7 @@ PreservedAnalyses LoopWalk::run(Loop &L,
         variabile a cui si sta assegnando un valore (TODO: bo)
     */
     for(long unsigned int i = 0; i < candidates.size(); i++){
-        if(!dominatesAllExits(candidates[i], exitingBB, DT)){
+        if(!dominatesAllExits(candidates[i], exitingBB, DT) || !isDeadAfterLoop(candidates[i], successorBB)){
             outs()<<"[Removed -- BB does not dominate all exits]\t"<<*candidates[i]<<"\n";
             candidates.erase(candidates.begin() + i);
             i--;
@@ -166,11 +195,17 @@ PreservedAnalyses LoopWalk::run(Loop &L,
             i--;
             continue;
         }
+
+        if(!dominatesAllUses(candidates[i], DT)){
+            outs()<<"[Removed -- var does not dominate all uses]\t"<<*candidates[i]<<"\n";
+            candidates.erase(candidates.begin() + i);
+            i--;
+            continue;
+        }
     }
 
     outs()<<"\n----- MOVING INSTRUCTIONS TO PREHEADER -----\n";
     BasicBlock* preheader = L.getLoopPreheader();
-    // TODO: Valutare cosa fare di questa riga qua sotto
     if(preheader) {
         outs()<<"[Preheader found]\t"<<*preheader<<'\n';
         for (auto instr : candidates){
