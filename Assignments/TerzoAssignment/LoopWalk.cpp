@@ -73,7 +73,7 @@ bool isLCSSA(PHINode* node){
 }
 
 /*  Verifica che il blocco di appartentenza dell'istruzione domini tutti i blocchi di uscita del loop. 
-    TODO: In realtà exitingBB in questo caso corrisponde al blocco if.else, non so esattamente il motivo ma il risultato è lo stesso */
+    NOTA: In realtà exitingBB in questo caso corrisponde al blocco if.else, non so esattamente il motivo ma il risultato è lo stesso */
 bool dominatesAllExits(Instruction* instr, SmallVector<BasicBlock*> exitingBB, DominatorTree &DT){
     BasicBlock* instrBB = instr->getParent();
         
@@ -91,9 +91,9 @@ bool dominatesAllExits(Instruction* instr, SmallVector<BasicBlock*> exitingBB, D
     Se per esempio una variabile è data da due argomenti che soddisfano la LoopInvarianza, ma almeno uno di quest definiti in un if, 
     non si può spostare fuori dal loop. */
 bool multipleDefinitions(Instruction* instr){
-    for(auto use = instr->user_begin(); use != instr->user_end(); use++){
+    for(auto user = instr->user_begin(); user != instr->user_end(); user++){
         PHINode* phi;
-        if((phi = dyn_cast<PHINode>(*use))){
+        if((phi = dyn_cast<PHINode>(*user))){
             if(!isLCSSA(phi)){
                 return false;
             }   
@@ -103,7 +103,7 @@ bool multipleDefinitions(Instruction* instr){
     return true;
 }
 
-/* Verifica che l'istruzione domini tutti i suoi utilizzi all'interno dei blocchi del loop.
+/*  Verifica che l'istruzione domini tutti i suoi utilizzi all'interno dei blocchi del loop.
     Questo controllo è necessario per evitare che l'istruzione venga spostata prima di un suo utilizzo. */
 bool dominatesAllUses(Instruction* instr, DominatorTree &DT){
     for(auto use = instr->use_begin(); use != instr->use_end(); use++){
@@ -115,16 +115,16 @@ bool dominatesAllUses(Instruction* instr, DominatorTree &DT){
 
     return true;
 }
-/*
-    FIXME: Questa funzione non è corretta
-*/
+
+/*  Verifica che l'istruzione non abbia usi al di fuori del loop, in tal caso può essere spostata nonostante il fatto
+    che non domini tutte le uscite  */
 bool isDeadAfterLoop(Instruction* instr, SmallVector<BasicBlock*> successorBB){
-    for(auto use = instr->user_begin(); use != instr->user_end(); use++){
-        if(std::find(successorBB.begin(), successorBB.end(), dyn_cast<Instruction>(*use)->getParent()) != successorBB.end()){
+    for(auto user = instr->user_begin(); user != instr->user_end(); user++){
+        BasicBlock* userBB = dyn_cast<Instruction>(*user)->getParent();
+        if(std::find(successorBB.begin(), successorBB.end(), userBB) != successorBB.end()){
             return false;
         }
     }
-    outs()<<"[Dead after loop]\t"<<*instr<<"\n";
     return true;
 }
 
@@ -171,30 +171,36 @@ PreservedAnalyses LoopWalk::run(Loop &L,
     L.getExitingBlocks(exitingBB);
     SmallVector<BasicBlock*> successorBB;
     L.getExitBlocks(successorBB);
+    
 
     outs()<<"\n----- CHECKING CODE MOTION CONDITIONS -----\n";
 
     /*  Ciclo dedicato all'analisi delle condizioni per la code motion:
         • Sono loop invariant (già verificata con lo step precedente)
-        • Si trovano in blocchi che dominano tutte le uscite del loop
+        • Si trovano in blocchi che dominano tutte le uscite del loop o sono dead all'uscita del loop
         • Assegnano un valore a variabili non assegnate altrove nel loop
         • Si trovano in blocchi che dominano tutti i blocchi nel loop che usano la
-        variabile a cui si sta assegnando un valore (TODO: bo)
+        variabile a cui si sta assegnando un valore
     */
     for(long unsigned int i = 0; i < candidates.size(); i++){
-        if(!dominatesAllExits(candidates[i], exitingBB, DT) || !isDeadAfterLoop(candidates[i], successorBB)){
-            outs()<<"[Removed -- BB does not dominate all exits]\t"<<*candidates[i]<<"\n";
-            candidates.erase(candidates.begin() + i);
-            i--;
-            continue;
+        if(!dominatesAllExits(candidates[i], exitingBB, DT)){
+            if(!isDeadAfterLoop(candidates[i], successorBB)){
+                outs()<<"[Removed -- BB does not dominate all exits]\t"<<*candidates[i]<<"\n";
+                candidates.erase(candidates.begin() + i);
+                i--;
+                continue;
+            }
+            else{
+                outs()<<"[Saved -- instruction dead after loop]\t"<<*candidates[i]<<"\n";
+            }
         }
 
-        if(!multipleDefinitions(candidates[i])){
+        /*if(!multipleDefinitions(candidates[i])){
             outs()<<"[Removed -- var has multiple definitions]\t"<<*candidates[i]<<"\n";
             candidates.erase(candidates.begin() + i);
             i--;
             continue;
-        }
+        }*/
 
         if(!dominatesAllUses(candidates[i], DT)){
             outs()<<"[Removed -- var does not dominate all uses]\t"<<*candidates[i]<<"\n";
@@ -215,7 +221,7 @@ PreservedAnalyses LoopWalk::run(Loop &L,
     } else {
         outs()<<"[No preheader found]\n";
     }
-    //TODO: tutta questa parte
+    //TODO: DFS non sappiamo se farla
 
     return PreservedAnalyses::none();
 }
