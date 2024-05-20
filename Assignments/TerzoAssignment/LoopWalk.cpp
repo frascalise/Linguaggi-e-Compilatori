@@ -178,7 +178,7 @@ PreservedAnalyses LoopWalk::run(Loop &L,
     /*  Ciclo dedicato all'analisi delle condizioni per la code motion:
         • Sono loop invariant (già verificata con lo step precedente)
         • Si trovano in blocchi che dominano tutte le uscite del loop o sono dead all'uscita del loop
-        • Assegnano un valore a variabili non assegnate altrove nel loop
+        • Assegnano un valore a variabili non assegnate altrove nel loop (condizione già soddisfatta in SSA)
         • Si trovano in blocchi che dominano tutti i blocchi nel loop che usano la
         variabile a cui si sta assegnando un valore
     */
@@ -221,7 +221,8 @@ PreservedAnalyses LoopWalk::run(Loop &L,
     } else {
         outs()<<"[No preheader found]\n";
     }
-    //TODO: DFS non sappiamo se farla
+    
+    
 
     return PreservedAnalyses::none();
 }
