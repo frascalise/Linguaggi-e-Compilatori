@@ -1,4 +1,4 @@
-#include "llvm/Transforms/Utils/LoopFusion.h"
+#include "llvm/Transforms/Utils/LFusion.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/Transforms/Utils/LoopRotationUtils.h"
@@ -92,9 +92,64 @@ bool checkLoopEquivalence(DominatorTree &DT, Loop *L, Loop *nextL, PostDominator
     return DT.dominates(L->getHeader(), nextL->getHeader()) && PDT.dominates(nextL->getHeader(), L->getHeader());
 }
 
+/*  TODO:
+    1. prendere body di nextL - OK
+    2. muovere body prima di latch di L
+    3. header di L deve puntare a exit di nextL
+*/
+void mergeLoops(Loop *L, Loop *nextL){
+    SmallVector<BasicBlock*> bodyNextL;
+    SmallVector<BasicBlock*> bodyL;
+    // Prendo tutti i blocchi del body del loop successivo
+    for(auto BB : nextL->getBlocks()){
+        if(BB != nextL->getLoopPreheader() && BB != nextL->getHeader() && BB != nextL->getLoopLatch())
+            bodyNextL.push_back(BB);
+    }
+    BasicBlock* latchL = L->getLoopLatch();
+    for(auto BB : bodyNextL){
+        BB->moveBefore(latchL);
+    }
+    
+    for(auto BB : L->getBlocks()){
+        if(BB != L->getLoopPreheader() && BB != L->getHeader() && BB != L->getLoopLatch())
+            bodyL.push_back(BB);
+    }
+    
+    for(auto BB : bodyL){
+        auto terminator = BB->getTerminator();
+        BranchInst *branch = cast<BranchInst>(terminator);
+        //bodyNextL[0]->removeFromParent();
+        outs()<<"successor "<<*(branch->getSuccessor(0))<<"\n";
+        //branch->setSuccessor(0,bodyNextL[0]);
+        bodyNextL[0]->moveBefore(branch->getSuccessor(0));
+        outs()<<*bodyNextL[0];
+        //outs()<< "\n[DEBUG] BB->getTerminator()" << *(BB->getTerminator()) << "\n";
+    }
+    
+    //outs()<<*(nextL->getLoopLatch()-1);
+    //Instruction *terminatoreBodyL = (L->getLoopLatch()-1)->getTerminator();
+    //outs()<<"Terminatore: "<<terminatoreBodyL<<"\n";
 
 
-PreservedAnalyses LoopFusion::run(Function &F,FunctionAnalysisManager &AM){
+    /*
+    outs() << "\n[DEBUG] Loop L: \n";
+    for(auto BB : L->getBlocks()){
+        outs()<<*BB<<"\n";
+    }
+
+    outs() << "\n[DEBUG] New L: \n";
+    for(auto BB : L->getBlocks()){
+        outs()<<*BB<<"\n";
+    }
+    outs() << "\n[DEBUG] New  nextL: \n";
+    for(auto BB : nextL->getBlocks()){
+        outs()<<*BB<<"\n";
+    }
+    */
+}
+
+
+PreservedAnalyses LFusion::run(Function &F,FunctionAnalysisManager &AM){
     LoopInfo &LI = AM.getResult<LoopAnalysis>(F);
     DominatorTree &DT = AM.getResult<DominatorTreeAnalysis>(F);
     PostDominatorTree &PDT = AM.getResult<PostDominatorTreeAnalysis>(F);
@@ -137,6 +192,8 @@ PreservedAnalyses LoopFusion::run(Function &F,FunctionAnalysisManager &AM){
         if(!checkTripCount(*L, *nextL, SE)){
             continue;
         }
+
+        mergeLoops(*L, *nextL);
 /*
         outs()<<"PREHEADER: "<<*((*L)->getLoopPreheader())<<"\n";
         outs()<<"HEADER: "<<*((*L)->getHeader())<<"\n";
@@ -151,3 +208,8 @@ PreservedAnalyses LoopFusion::run(Function &F,FunctionAnalysisManager &AM){
     }
     return PreservedAnalyses::all();
 }
+
+/*
+
+
+*/
