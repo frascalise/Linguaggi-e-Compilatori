@@ -1,4 +1,4 @@
-#include "llvm/Transforms/Utils/LFusion.h"
+#include "llvm/Transforms/Utils/LoopFusion.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/Transforms/Utils/LoopRotationUtils.h"
@@ -10,6 +10,8 @@
 #include "llvm/ADT/GenericCycleImpl.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include <llvm/IR/Constants.h>
+
+#include <vector>
 
 using namespace llvm;
 
@@ -92,64 +94,112 @@ bool checkLoopEquivalence(DominatorTree &DT, Loop *L, Loop *nextL, PostDominator
     return DT.dominates(L->getHeader(), nextL->getHeader()) && PDT.dominates(nextL->getHeader(), L->getHeader());
 }
 
-/*  TODO:
-    1. prendere body di nextL - OK
-    2. muovere body prima di latch di L
-    3. header di L deve puntare a exit di nextL
+/*  Linka il blocco src al blocco dst modificando l'operatore del branch incondizionato del terminatore
+    del blocco src e facendolo puntare al blocco dst
+    NB: questo metodo funziona solo nel caso in cui alla fine del blocco ci sia un branch terminator    */
+void linkBlocks(BasicBlock* src, BasicBlock* dst, unsigned int idx){
+    Instruction* terminator = src->getTerminator();
+    BranchInst *branch = cast<BranchInst>(terminator);
+    branch->setSuccessor(idx, dst);
+}
+
+/*  Trova tutti i blocchi che compongono il body del loop. Questa lista è ottenuta come differenza dell'insieme dei
+    blocchi del loop con l'insieme formato da:
+    - header
+    - blocchi latch
+    - blocchi exitings
+    Refs: https://www.llvm.org/docs/LoopTerminology.html#terminology
 */
-void mergeLoops(Loop *L, Loop *nextL){
-    SmallVector<BasicBlock*> bodyNextL;
-    SmallVector<BasicBlock*> bodyL;
-    // Prendo tutti i blocchi del body del loop successivo
-    for(auto BB : nextL->getBlocks()){
-        if(BB != nextL->getLoopPreheader() && BB != nextL->getHeader() && BB != nextL->getLoopLatch())
-            bodyNextL.push_back(BB);
+void getBodyBlocks(Loop *L, std::vector<BasicBlock*>& bodyBlocks){
+
+    SmallVector<BasicBlock*> latches;
+    L->getLoopLatches(latches);
+    SmallVector<BasicBlock*> exitings;
+    L->getExitingBlocks(exitings);
+
+    for(auto BB : L->getBlocks()){
+        if(BB == L->getHeader())
+            continue;
+        if(std::find(latches.begin(), latches.end(), BB) != latches.end())
+            continue; 
+        if(std::find(exitings.begin(), exitings.end(), BB) != exitings.end())
+            continue; 
+        bodyBlocks.push_back(BB);  
     }
+}
+
+/*  Sostituisce tutti gli usi dell'incrementatore del loop B con l'incrementatore del loop A. Gli incrementatori
+    si trovano nei phi node all'interno degli header dei loop e, quindi, appena viene trovato un phi si salva il valore */
+void switchIncr(BasicBlock* headerL, BasicBlock* headerNextL){
+
+    /*  Selezione riferimento all'incrementatore del loop A. Occorre prendere questo riferimento
+        per sostituirilo a tutti gli usi dell'incrementatore del loop B all'interno del body del loop
+        B. */
+    PHINode* incrL = NULL;
+    for(auto instr = headerL->begin(); instr != headerL->end(); instr++){
+        if((incrL = dyn_cast<PHINode>(instr)))
+            break;
+    }
+
+    /*  Selezione riferimento a incrementatore del loop B (da sostituire con riferimento a 
+        incrementatore del loop A) */
+    PHINode* incrNextL = NULL;
+    for(auto instr = headerNextL->begin(); instr != headerNextL->end(); instr++){
+        if((incrNextL = dyn_cast<PHINode>(instr)))
+            break;
+    }
+
+    //sostituzione incrementatore del loop B
+    incrNextL->replaceAllUsesWith(incrL);
+}
+
+/*  Questa funzione si occupa di unire i due loop in questione, in ordine:
+    1. sostituisce tutti gli usi dell'incrementatore del loop B con l'incrementatore del loop A
+    2. sposta tutti i blocchi del body del loop B prima del latch del loop A
+    3. vari link dei blocchi per completare l'unione e isolare il vecchio CFG del loop B per poter eseguire
+       una dead code elimination successivamente */
+void mergeLoops(Loop *L, Loop *nextL){
+    
+    /*  Salvataggio dei blocchi principali del loop B perchè una volta modificata la sua struttura non
+        saranno più accessibili.
+        NB: questo passo funziona solo se i loop in question hanno un solo latch e un solo exit */
+    BasicBlock* exitNextL = nextL->getExitBlock();
+    BasicBlock* latchNextL = nextL->getLoopLatch();
+    BasicBlock* headerNextL = nextL->getHeader();
+
+    //selezione blocchi che formano il body dei due loop
+    std::vector<BasicBlock*> bodyNextL;
+    getBodyBlocks(nextL, bodyNextL);
+    std::vector<BasicBlock*> bodyL;
+    getBodyBlocks(L, bodyL);
+
+    //sostituzione incrementatori
+    switchIncr(L->getHeader(), headerNextL);
+
+    /*  Spostamento di tutti i blocchi del body del loop B all'interno del loop A, immediatamente prima
+        del blocco latch    */
     BasicBlock* latchL = L->getLoopLatch();
     for(auto BB : bodyNextL){
         BB->moveBefore(latchL);
     }
-    
-    for(auto BB : L->getBlocks()){
-        if(BB != L->getLoopPreheader() && BB != L->getHeader() && BB != L->getLoopLatch())
-            bodyL.push_back(BB);
-    }
-    
-    for(auto BB : bodyL){
-        auto terminator = BB->getTerminator();
-        BranchInst *branch = cast<BranchInst>(terminator);
-        //bodyNextL[0]->removeFromParent();
-        outs()<<"successor "<<*(branch->getSuccessor(0))<<"\n";
-        //branch->setSuccessor(0,bodyNextL[0]);
-        bodyNextL[0]->moveBefore(branch->getSuccessor(0));
-        outs()<<*bodyNextL[0];
-        //outs()<< "\n[DEBUG] BB->getTerminator()" << *(BB->getTerminator()) << "\n";
-    }
-    
-    //outs()<<*(nextL->getLoopLatch()-1);
-    //Instruction *terminatoreBodyL = (L->getLoopLatch()-1)->getTerminator();
-    //outs()<<"Terminatore: "<<terminatoreBodyL<<"\n";
 
+    /*  Linking dell'ultimo blocco del body del loop B al latch del loop A  */
+    linkBlocks(bodyNextL.back(), latchL, 0);
+    
+    /*  Linking dell'ultimo blocco del body del loop A al primo blocco del body del loop B */
+    linkBlocks(bodyL.back(), bodyNextL.front(), 0);
 
-    /*
-    outs() << "\n[DEBUG] Loop L: \n";
-    for(auto BB : L->getBlocks()){
-        outs()<<*BB<<"\n";
-    }
+    /*  Linking dell'header del loop A al blocco d'uscita del loop B (nel ramo false)*/
+    linkBlocks(L->getHeader(), exitNextL, 1);
 
-    outs() << "\n[DEBUG] New L: \n";
-    for(auto BB : L->getBlocks()){
-        outs()<<*BB<<"\n";
-    }
-    outs() << "\n[DEBUG] New  nextL: \n";
-    for(auto BB : nextL->getBlocks()){
-        outs()<<*BB<<"\n";
-    }
-    */
+    /*  Linking dell'header del loop B al latch del loop B (sia true che false). In questo modo il codice del loop
+        B sarà completamente isolato e potrà essere eliminato con il passo "simplifycfg".*/
+    linkBlocks(headerNextL, latchNextL, 0);
+    linkBlocks(headerNextL, latchNextL, 1);
 }
 
 
-PreservedAnalyses LFusion::run(Function &F,FunctionAnalysisManager &AM){
+PreservedAnalyses LoopFusion::run(Function &F,FunctionAnalysisManager &AM){
     LoopInfo &LI = AM.getResult<LoopAnalysis>(F);
     DominatorTree &DT = AM.getResult<DominatorTreeAnalysis>(F);
     PostDominatorTree &PDT = AM.getResult<PostDominatorTreeAnalysis>(F);
@@ -194,22 +244,7 @@ PreservedAnalyses LFusion::run(Function &F,FunctionAnalysisManager &AM){
         }
 
         mergeLoops(*L, *nextL);
-/*
-        outs()<<"PREHEADER: "<<*((*L)->getLoopPreheader())<<"\n";
-        outs()<<"HEADER: "<<*((*L)->getHeader())<<"\n";
-        outs()<<"CONTENUTO\n";
-        for(auto i:(*L)->getBlocks()){
-            outs()<<*i;
-        }
-        outs()<<"EXITING BLOCK: "<<*((*L)->getExitingBlock())<<"\n";
-        outs()<<"EXIT BLOCK: "<<*((*L)->getExitBlock())<<"\n";
-        outs()<<"successore di exiting block"<<(*L)->getSingleSuccessor()<<'\n';
-*/        
+    
     }
-    return PreservedAnalyses::all();
+    return PreservedAnalyses::none();
 }
-
-/*
-
-
-*/
