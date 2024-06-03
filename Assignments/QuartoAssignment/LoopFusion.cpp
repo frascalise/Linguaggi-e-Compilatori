@@ -94,8 +94,9 @@ bool checkLoopEquivalence(DominatorTree &DT, Loop *L, Loop *nextL, PostDominator
 
 /*  TODO:
     1. prendere body di nextL - OK
-    2. muovere body prima di latch di L
-    3. header di L deve puntare a exit di nextL
+    2. muovere body di nextL prima di latch di L
+    3. body di nextL deve puntare al latch di L
+    4. l'header di L deve puntare alla exit di nextL
 */
 void mergeLoops(Loop *L, Loop *nextL){
     SmallVector<BasicBlock*> bodyNextL;
@@ -105,9 +106,16 @@ void mergeLoops(Loop *L, Loop *nextL){
         if(BB != nextL->getLoopPreheader() && BB != nextL->getHeader() && BB != nextL->getLoopLatch())
             bodyNextL.push_back(BB);
     }
+    auto exitingNextL=nextL->getExitingBlock();
     BasicBlock* latchL = L->getLoopLatch();
     for(auto BB : bodyNextL){
+        //sposto il body di nextL prima del latch di L
         BB->moveBefore(latchL);
+        //faccio puntare il branch del body di nextL al latch di L
+        auto terminator = BB->getTerminator();
+        BranchInst *branch = cast<BranchInst>(terminator);
+        branch->setSuccessor(0,L->getLoopLatch());
+
     }
     
     for(auto BB : L->getBlocks()){
@@ -115,17 +123,31 @@ void mergeLoops(Loop *L, Loop *nextL){
             bodyL.push_back(BB);
     }
     
+
+    
     for(auto BB : bodyL){
+        //il branch della fine del body di L deve puntare al body di nextL, oppure essere eliminato (errore)
         auto terminator = BB->getTerminator();
         BranchInst *branch = cast<BranchInst>(terminator);
-        //bodyNextL[0]->removeFromParent();
         outs()<<"successor "<<*(branch->getSuccessor(0))<<"\n";
-        //branch->setSuccessor(0,bodyNextL[0]);
-        bodyNextL[0]->moveBefore(branch->getSuccessor(0));
-        outs()<<*bodyNextL[0];
+        //istruzione che dà errore
+        branch->setSuccessor(0,bodyNextL[0]);
+        
+
         //outs()<< "\n[DEBUG] BB->getTerminator()" << *(BB->getTerminator()) << "\n";
     }
-    
+    //prendo l'etichetta di uscita da nextL
+    auto terminatorNextL=exitingNextL->getTerminator();
+    BranchInst *branchNextL=cast<BranchInst>(terminatorNextL);
+    auto successorNextL=branchNextL->getSuccessor(1);
+    //modifico l'uscita dall'header di L con quella di nextL
+    auto exitingL=L->getExitingBlock();
+    auto terminatorL=exitingL->getTerminator();
+    BranchInst *branchL=cast<BranchInst>(terminatorL);
+    branchL->setSuccessor(1,successorNextL);
+
+
+
     //outs()<<*(nextL->getLoopLatch()-1);
     //Instruction *terminatoreBodyL = (L->getLoopLatch()-1)->getTerminator();
     //outs()<<"Terminatore: "<<terminatoreBodyL<<"\n";
@@ -194,22 +216,7 @@ PreservedAnalyses LFusion::run(Function &F,FunctionAnalysisManager &AM){
         }
 
         mergeLoops(*L, *nextL);
-/*
-        outs()<<"PREHEADER: "<<*((*L)->getLoopPreheader())<<"\n";
-        outs()<<"HEADER: "<<*((*L)->getHeader())<<"\n";
-        outs()<<"CONTENUTO\n";
-        for(auto i:(*L)->getBlocks()){
-            outs()<<*i;
-        }
-        outs()<<"EXITING BLOCK: "<<*((*L)->getExitingBlock())<<"\n";
-        outs()<<"EXIT BLOCK: "<<*((*L)->getExitBlock())<<"\n";
-        outs()<<"successore di exiting block"<<(*L)->getSingleSuccessor()<<'\n';
-*/        
+    
     }
     return PreservedAnalyses::all();
 }
-
-/*
-
-
-*/
